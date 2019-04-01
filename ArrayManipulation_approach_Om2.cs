@@ -141,7 +141,7 @@ class Solution {
                     if (current.End <= processed.End) break;
                 }
 
-                if (intervalsToAddInProcessed.Count == 0) {
+                if (intervalsToAddInProcessed.Count == 0 || current.End > lastChecked.End) {
                     Interval fromTheLastUntilTheEnd = GetIntervalBetweenLastProccessedIntervalAndTheEndOfImaginaryArray(lastChecked, n);
                     if (fromTheLastUntilTheEnd != null)                     intervalsToAddInProcessed.Add(fromTheLastUntilTheEnd.Intersection(current));
                 }
