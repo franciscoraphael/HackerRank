@@ -13,36 +13,29 @@ using System.Text;
 using System;
 
 class Solution {
+    public class Interval {
+        public int Begin { get; private set; }
+        public int End { get; private set; }
+        public long Value { get; private set; }
 
-    public class Interval : IComparable<Interval> {
-        public uint Begin { get; private set; }
-        public uint End { get; private set; }
-        public ulong Value { get; private set; }
-
-        public Interval(uint begin, uint end, ulong value){
+        public Interval(int begin, int end, long value){
             this.Begin = begin;
             this.End = end;
             this.Value = value;
         }
 
-        public Interval(int begin, int end, int value) : this((uint)begin, (uint)end, (ulong)value) { }
+        public Interval(int begin, int end) : this(begin, end, 0){}
 
-        public Interval(uint begin, uint end) : this(begin, end, 0){}
-
-        public int CompareTo(Interval other) {
-            return this.Begin.CompareTo(other.Begin);
-        }
-
-        public bool Contains(uint point) {
+        public bool Contains(int point) {
             return this.Begin <= point && point <= this.End;
         }
 
         public bool Contains(Interval other) {
-            return this.Contains(other.Begin) && this.Contains(other.End);
+            return other != null && this.Contains(other.Begin) && this.Contains(other.End);
         }
 
         public bool Intersects(Interval other) {
-            return this.Contains(other.Begin) || this.Contains(other.End) || other.Contains(this.Begin) || other.Contains(this.End);
+            return other != null && this.Contains(other.Begin) || this.Contains(other.End) || other.Contains(this.Begin) || other.Contains(this.End);
         }
 
         public Interval Intersection(Interval other) {
@@ -62,16 +55,17 @@ class Solution {
         }
     }
 
-    static Interval GetIntervalBetweenAdjacentProccessedIntervals(Interval first, Interval second) {
-            if (first == null || second == null) return null;
-            if (first.End + 1 == second.Begin) return null;
-            return new Interval(first.End + 1, second.Begin - 1);
-    }
+    // Needed only for the purpose of having an O(1) "insertion method"
+    public class ListNode {
+        public Interval Value { get; set; }
+        public ListNode Next { get; set; }
 
-    static Interval GetIntervalBetweenLastProccessedIntervalAndTheEndOfImaginaryArray(Interval lastProcessedInterval, uint endOfImaginaryArray) {
-        uint begin = lastProcessedInterval.End + 1;
-        if (begin > endOfImaginaryArray) return null;
-        return new Interval(begin, endOfImaginaryArray);
+        public ListNode (Interval value) : this (value, null) {}
+
+        public ListNode (Interval value, ListNode next) {
+            this.Value = value;
+            this.Next = next;
+        }
     }
 
     static T GetMaxBetween<T>(T first, T second) where T : IComparable, IComparable<T>
@@ -84,79 +78,44 @@ class Solution {
     }
 
     // Complete the arrayManipulation function below.
-    static ulong arrayManipulation(uint n, uint m, uint[][] queries) {
-        // approach: array with 'n' items will not be created, instead only manipulations over the 'm' queries will be made
-        // rational: O(m^2) is better than O(n*m)
+    static long arrayManipulation(int n, int m, int[][] queries) {
+        // approach: array with 'n' items will not be created, instead only some processing over the 'm' queries will be made
+        // rational: O(m^2) is potentially faster than O(n*m)
+        // more on "https://github.com/franciscoraphael/HackerRank/blob/master/ArrayManipulation_approach_Om2.cs"
 
-        ulong max = 0;
+        long max = 0;
 
-        // processedIntervals = "merged queries", or "equivalent set of intervals with  no intersection between each other"
-        // the number of processed intervals is potentially greater than the number of queries
-        SortedSet<Interval> processedIntervals = new SortedSet<Interval>();
+        ListNode processedIntervalsHead = new ListNode(new Interval(1, n, 0));
 
-        // the below lists are necessary to avoid changes on 'processedIntervals' set during its exploration
-        List<Interval> intervalsToRemoveFromProcessed = new List<Interval>();
-        List<Interval> intervalsToAddInProcessed = new List<Interval>();
+        for (int i = 0; i < m; i++) {
+            Interval processing = new Interval(queries[i][0],queries[i][1],queries[i][2]);
+            for (ListNode processedNode = processedIntervalsHead; processedNode != null; processedNode = processedNode.Next) {
+                Interval processed = processedNode.Value;
 
-        for (int i=0; i<m; i++) {
-            Interval current = new Interval((uint)queries[i][0], (uint)queries[i][1], (ulong)queries[i][2]);
+                if (processing.End < processed.Begin) break;
+                if (processing.Begin > processed.End) continue;
 
-            // optimization: a '0' valued query will make no difference on resultant ones
-            if (current.Value == 0) continue;
-            
-            intervalsToRemoveFromProcessed.Clear();
-            intervalsToAddInProcessed.Clear();
+                Interval intersection = processing.Intersection(processed); // intersection already have as its value the sum of each given Interval
+                if (intersection == null) continue;
 
-            if (i == 0) {
-                intervalsToAddInProcessed.Add(current);
-            }
-            else {
-                Interval lastChecked = null;
-                Interval betweenLastAndCurrent = null;
-                foreach (Interval processed in processedIntervals) {
-                    // optimization: avoid run all intervals again unnecessarily
-                    if (current.Begin > processed.End) {
-                        lastChecked = processed;
-                        continue;
-                    }
-
-                    betweenLastAndCurrent = GetIntervalBetweenAdjacentProccessedIntervals(lastChecked, processed);
-
-                    if (betweenLastAndCurrent != null) {
-                        intervalsToAddInProcessed.Add(betweenLastAndCurrent.Intersection(current));
-                    }
-
-                    Interval intersection = processed.Intersection(current);
-                    if (intersection != null) {
-                        intervalsToRemoveFromProcessed.Add(processed);
-                        intervalsToAddInProcessed.Add(intersection);
-                        
-                        List<Interval> notAffected = processed.Except(intersection);
-                        intervalsToAddInProcessed.AddRange(notAffected);
-                    }
-                    
-                    lastChecked = processed;
-
-                    // optimization: avoid run all intervals again unnecessarily
-                    if (current.End <= processed.End) break;
+                max = GetMaxBetween(max, intersection.Value);
+                
+                if (processing.Contains(processed)) { // means that 'intersection' and 'processed' have the same positions range
+                    processedNode.Value = intersection;
                 }
+                else {
+                    List<Interval> resultantIntervals = processed.Except(processing);
+                    int positionToInsert = (intersection.Begin < resultantIntervals[0].Begin) ? 0 : 1;
+                    resultantIntervals.Insert(positionToInsert, intersection);
 
-                if (intervalsToAddInProcessed.Count == 0 || current.End > lastChecked.End) {
-                    Interval fromTheLastUntilTheEnd = GetIntervalBetweenLastProccessedIntervalAndTheEndOfImaginaryArray(lastChecked, n);
-                    if (fromTheLastUntilTheEnd != null)                     intervalsToAddInProcessed.Add(fromTheLastUntilTheEnd.Intersection(current));
-                }
-            }
+                    processedNode.Value = resultantIntervals[0];
+                    processedNode.Next = new ListNode(resultantIntervals[1], processedNode.Next);
+                    processedNode = processedNode.Next;
 
-            // process intervalsToRemoveFromProcessed
-            foreach(var toRemove in intervalsToRemoveFromProcessed){
-                if (toRemove != null) processedIntervals.Remove(toRemove);
-            }
-            
-            // process intervalsToAddInProcessed
-            foreach(var toAdd in intervalsToAddInProcessed){
-                if (toAdd != null) {
-                    processedIntervals.Add(toAdd);
-                    max = GetMaxBetween(max, toAdd.Value);
+                    if (resultantIntervals.Count > 2) {
+                        processedNode.Next = new ListNode(resultantIntervals[2], processedNode.Next);
+                        processedNode = processedNode.Next;
+                    }
                 }
             }
         }
@@ -167,19 +126,19 @@ class Solution {
     static void Main(string[] args) {
         TextWriter textWriter = new StreamWriter(@System.Environment.GetEnvironmentVariable("OUTPUT_PATH"), true);
 
-        string[] nm = Console.ReadLine().Trim().Split(' ');
+        string[] nm = Console.ReadLine().Split(' ');
 
-        uint n = uint.Parse(nm[0]);
+        int n = Convert.ToInt32(nm[0]);
 
-        uint m = uint.Parse(nm[1]);
+        int m = Convert.ToInt32(nm[1]);
 
-        uint[][] queries = new uint[m][];
+        int[][] queries = new int[m][];
 
         for (int i = 0; i < m; i++) {
-            queries[i] = Array.ConvertAll(Console.ReadLine().Trim().Split(' '), queriesTemp => uint.Parse(queriesTemp));
+            queries[i] = Array.ConvertAll(Console.ReadLine().Split(' '), queriesTemp => Convert.ToInt32(queriesTemp));
         }
 
-        ulong result = arrayManipulation(n, m, queries);
+        long result = arrayManipulation(n, m, queries);
 
         textWriter.WriteLine(result);
 
@@ -187,4 +146,3 @@ class Solution {
         textWriter.Close();
     }
 }
-
